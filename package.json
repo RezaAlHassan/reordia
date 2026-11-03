@@ -1,0 +1,10 @@
+{
+  "name": "refill-meta",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build-meta.mjs",
+    "check": "node --check index.template.js && node --check build-meta.mjs"
+  }
+}
