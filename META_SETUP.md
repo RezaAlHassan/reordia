@@ -1,92 +1,89 @@
-# Refill Meta setup
+# Reordia on Cloudflare Workers
 
-This project currently supports a Facebook authorization test. It lists the
-Pages available to the signed-in account. It does not save access tokens,
-receive Messenger events, or send messages yet.
+The Worker serves the dashboard and handles `/api/meta/status`,
+`/api/meta/connect`, and `/api/meta/callback` on the server.
 
-## 1. Configure the hosting platform
-
-Add these values in the platform's server-side secrets or environment settings:
-
-| Name | Value |
-| --- | --- |
-| `META_APP_ID` | App ID from your Meta app settings |
-| `META_APP_SECRET` | App Secret from your Meta app settings |
-| `META_GRAPH_VERSION` | Optional; the backend currently defaults to `v24.0` |
-
-The local `env` file is a private place to keep these values. The app does not
-load it automatically. Do not upload it as a public asset or include it in the
-build output. Configure secrets directly on the platform, then redeploy if the
-platform requires it.
-
-The current backend uses the hosting platform's `oai-authenticated-user-id`
-header to check sign-in. Use hosting that securely supplies this identity and
-removes any user-supplied copy of the header. Another host needs real session
-authentication before this flow can be used safely.
-
-## 2. Prepare the build
-
-With Node.js and npm installed, run:
+## Deploy
 
 ```powershell
+npm ci
+npx wrangler login
 npm run check
-npm run build
+npm test
+npm run deploy
+npm run secrets
 ```
 
-The build uses the files in this project root and creates:
+The first deploy creates the `reordia` Worker. It returns HTTP 503 until
+`REORDIA_ADMIN_PASSWORD` is set. The secrets command reads the private `env`
+file, creates a random password if needed, writes the ignored `.dev.vars`
+file, and uploads non-empty values. It does not print secret values.
 
-- `dist/index.html`: dashboard
-- `dist/server/index.js`: backend with the dashboard included
-- `dist/.openai/hosting.json`: hosting project settings
+Open `env` to find the workspace password. The username is `admin`.
+The browser asks for these credentials when you open the Worker URL.
+This shared password protects the connection test. A multi-business product
+still needs separate user accounts and sessions.
 
-Deploy the `dist` artifact with backend support. Serving only the HTML will
-not provide the `/api/meta/*` routes. The build does not include local secrets.
+Alternatively, configure these Worker runtime secrets directly in Cloudflare:
 
-## 3. Configure Meta
+- `REORDIA_ADMIN_PASSWORD`: the workspace password
+- `META_APP_ID`: your Meta App ID
+- `META_APP_SECRET`: your Meta App Secret
 
-Replace `YOUR-DOMAIN` below with the deployed HTTPS hostname.
+Deploy the settings change if the dashboard requires it. Local `env` changes
+are not uploaded automatically; run `npm run secrets` again to upload them.
+Never commit `env` or `.dev.vars` or put secrets in `wrangler.jsonc`.
 
-1. Open the intended app in Meta for Developers.
-2. Configure Messenger and the Facebook login flow suitable for your app.
-3. Register this exact valid OAuth redirect URI:
-   `https://YOUR-DOMAIN/api/meta/callback`.
-4. Configure the app domain and website URL where requested.
-5. During development, use an account with an app role and suitable Page access.
-6. The current flow requests `pages_show_list`, `pages_manage_metadata`, and
-   `pages_messaging`. Set up the required permission access in Meta's dashboard.
+## Cloudflare Git builds
 
-Meta may require a configured Facebook Login for Business flow and a
-configuration ID for your selected app setup. This backend currently uses a
-scope-based OAuth request and does not pass a configuration ID. Match the Meta
-setup to the implemented flow, or update that flow before using a configuration
-that requires an ID.
+Connect `RezaAlHassan/reordia`, choose branch `main`, and use the repository
+root. Build command: `npm run build`. Deploy command: `npx wrangler deploy`.
+Set the runtime secrets above separately from deployment credentials.
 
-## 4. Check the connection
+`wrangler.jsonc` points to `dist/server/index.js`. The build embeds the dashboard
+in the Worker, so all routes use the server handler. No static assets directory
+is exposed. The old `hosting.json` is not used by Cloudflare.
 
-1. Open the deployed Refill app while signed in.
-2. Visit `/api/meta/status`. `configured: true` means both required environment
-   values exist. It does not prove the credentials or permissions are valid.
-3. Return to the dashboard and click **Connect Facebook Page**.
-4. Complete Facebook authorization.
-5. Confirm the success screen lists the expected Page.
+## Meta configuration
 
-If setup is missing, check platform environment settings. If the redirect is
-rejected, compare the full callback URL, including HTTPS and the path. If no
-Pages appear, check the account's Page access and granted permissions.
+1. Copy the HTTPS Worker URL printed after deployment.
+2. Register `https://YOUR-WORKER-HOST/api/meta/callback` as the exact valid
+   OAuth redirect URI in your Meta app's login settings.
+3. Configure Messenger and the Facebook login flow. The current OAuth request
+   uses `pages_show_list`, `pages_manage_metadata`, and `pages_messaging`.
+   If your selected Meta setup needs a configuration ID, update the OAuth flow
+   to use it before testing that setup.
+4. During development, use an app-role account with suitable Page access.
+5. Open the Worker and sign in with username `admin` and the password in `env`.
+6. Open `/api/meta/status`. `configured: true` means both Meta values exist;
+   it does not validate the credentials or permissions.
+7. Click **Connect Facebook Page**, authorize, and check the returned Page list.
 
-## 5. Work needed before real sending
+`META_GRAPH_VERSION` defaults to `v24.0`. Check that the version is supported
+by your Meta app before production use.
 
-- Save the selected Page and its encrypted access token against a business account.
-- Add a public webhook with verification, signature checks, and Page subscriptions.
-- Link customer records to Page-scoped Messenger IDs from real interactions.
-- Add an authenticated server-side Send API route with eligibility and consent checks.
-- Add a database, scheduled jobs, duplicate prevention, retries, and delivery tracking.
-- Replace the demo's local "sent" status with actual API results.
-- Complete Meta's required review and access steps for other businesses.
+## Local preview
 
-There is no webhook URL to register in this version. Do not use the OAuth
-callback URL as a webhook.
+```powershell
+node prepare-cloudflare-env.mjs
+npm run dev
+```
 
-Standard Messenger sending is subject to the messaging window. A due reminder
-or a merchant clicking Send does not open that window. Verify an eligible Meta
-route for reminders outside the window before enabling automatic sending.
+For OAuth, use a public HTTPS hostname registered with Meta. The OAuth state
+cookie requires HTTPS.
+
+## Current limits
+
+The connection test does not retain Page tokens or send messages. There is no
+Messenger webhook, database, Send API route, or scheduled sender yet. Do not
+register the OAuth callback as a webhook. Customer records still live in the
+browser, and the demo's sent status is not proof of delivery.
+
+Real messaging needs encrypted Page token storage, verified webhooks, customer
+Page-scoped IDs, business-level access control, consent checks, and delivery
+tracking. Scheduled sending also needs server jobs and duplicate prevention.
+Complete Meta review and permission access for other businesses.
+
+Standard Messenger sending follows Meta's messaging window. A due reminder or
+a merchant clicking Send does not open it. Verify an eligible Meta route before
+enabling reminders outside the window.
