@@ -5,5 +5,15 @@
   "compatibility_date": "2026-11-03",
   "workers_dev": true,
   "build": { "command": "npm run build" },
-  "vars": { "META_GRAPH_VERSION": "v24.0" }
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "reordia",
+    "database_id": "16a75533-983a-40b0-a34a-92d337caf825",
+    "migrations_dir": "migrations"
+  }],
+  "vars": {
+    "META_APP_ID": "3844363249044698",
+    "WORKSPACE_ID": "jayga",
+    "META_GRAPH_VERSION": "v24.0"
+  }
 }

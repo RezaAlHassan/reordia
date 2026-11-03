@@ -2,6 +2,7 @@
 
 The Worker serves the dashboard and handles `/api/meta/status`,
 `/api/meta/connect`, and `/api/meta/callback` on the server.
+The Page connection screen is `/api/meta/connection`.
 
 ## Deploy
 
@@ -10,6 +11,7 @@ npm ci
 npx wrangler login
 npm run check
 npm test
+npm run db:migrate
 npm run deploy
 npm run secrets
 ```
@@ -27,7 +29,10 @@ still needs separate user accounts and sessions.
 Alternatively, configure these Worker runtime secrets directly in Cloudflare:
 
 - `REORDIA_ADMIN_PASSWORD`: the workspace password
-- `META_APP_ID`: your Meta App ID
+- `PAGE_TOKEN_ENCRYPTION_KEY`: a base64-encoded 32-byte AES key
+
+`META_APP_ID` is a non-secret variable in `wrangler.jsonc` and is not uploaded
+by the secrets command. Keep it in sync with the Meta app you configure.
 - `META_APP_SECRET`: your Meta App Secret
 
 Deploy the settings change if the dashboard requires it. Local `env` changes
@@ -57,7 +62,9 @@ is exposed. The old `hosting.json` is not used by Cloudflare.
 5. Open the Worker and sign in with username `admin` and the password in `env`.
 6. Open `/api/meta/status`. `configured: true` means both Meta values exist;
    it does not validate the credentials or permissions.
-7. Click **Connect Facebook Page**, authorize, and check the returned Page list.
+7. Open **Facebook Page connection**, connect Facebook, and select **Jayga**.
+8. Click **Save Page connection**. Reopen the connection screen to confirm it
+   remembers Jayga, then click **Check connection** to validate the saved token.
 
 `META_GRAPH_VERSION` defaults to `v24.0`. Check that the version is supported
 by your Meta app before production use.
@@ -66,6 +73,7 @@ by your Meta app before production use.
 
 ```powershell
 node prepare-cloudflare-env.mjs
+npm run db:local
 npm run dev
 ```
 
@@ -74,12 +82,31 @@ cookie requires HTTPS.
 
 ## Current limits
 
-The connection test does not retain Page tokens or send messages. There is no
+The app saves the selected Page token encrypted with AES-256-GCM in D1.
+Each write uses a fresh IV and binds the ciphertext to the workspace and Page.
+User tokens are used only during authorization. Page candidates are encrypted
+until selection, expire after 10 minutes, and are removed on the next login
+attempt or disconnect. OAuth state is server-side, expiring, and single-use.
+
+Keep a private backup of `PAGE_TOKEN_ENCRYPTION_KEY`. Do not replace it while
+Page records exist: a different key cannot decrypt those records. A future
+key rotation must re-encrypt saved tokens. The key stays in Cloudflare secrets;
+it is not stored in D1. Tokens are never returned to the browser.
+
+The current deployment has one admin workspace, `jayga`, set in Wrangler.
+Workspace SQL scoping is in place, but this is not multi-tenant sign-in.
+Do not onboard another business by sharing this admin account.
+
+**Disconnect Page** deletes the stored token and pending authorizations in
+Reordia. Remove the app in Facebook Business Integrations to revoke access
+on Meta as well. Reconnect if Meta expires or revokes the token.
+
+The app does not send messages yet. There is no
 Messenger webhook, database, Send API route, or scheduled sender yet. Do not
 register the OAuth callback as a webhook. Customer records still live in the
 browser, and the demo's sent status is not proof of delivery.
 
-Real messaging needs encrypted Page token storage, verified webhooks, customer
+Real messaging next needs verified webhooks, customer
 Page-scoped IDs, business-level access control, consent checks, and delivery
 tracking. Scheduled sending also needs server jobs and duplicate prevention.
 Complete Meta review and permission access for other businesses.

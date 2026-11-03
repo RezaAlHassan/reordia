@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "build": "node build-meta.mjs",
-    "check": "node --check index.template.js && node --check build-meta.mjs",
+    "check": "node --check index.template.js && node --check build-meta.mjs && node --check meta.mjs && node --check prepare-cloudflare-env.mjs",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "secrets": "node prepare-cloudflare-env.mjs && wrangler secret bulk .dev.vars",
+    "db:migrate": "wrangler d1 migrations apply reordia --remote",
+    "db:local": "wrangler d1 migrations apply reordia --local",
     "test": "npm run build && node --test worker.test.mjs"
   },
   "devDependencies": {

@@ -13,5 +13,6 @@ fs.mkdirSync('dist/server',{recursive:true});
 fs.mkdirSync('dist/.openai',{recursive:true});
 fs.writeFileSync('dist/index.html', html);
 fs.writeFileSync('dist/server/index.js',template.replace('__REFILL_HTML_JSON__',JSON.stringify(html)));
+fs.copyFileSync('meta.mjs', 'dist/server/meta.mjs');
 fs.copyFileSync('hosting.json','dist/.openai/hosting.json');
 console.log('Built Refill Meta test Worker');
